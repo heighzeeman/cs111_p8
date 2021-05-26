@@ -1,12 +1,12 @@
 Reached log end: bad checksum
-played log entries 3419697679 to 3419697696
+played log entries 3712386046 to 3712386063
 1 used blocks (out of 7)
   0 01002e00 00000000 00000000 00000000  >  .             <
  16 01002e2e 00000000 00000000 00000000  >  ..            <
  32 00000000 00000000 00000000 00000000  >                <
 *
 1 used inodes (out of 16)
-    1 drwxr-xr-x   2   0   0       48 May 26 2021 18:36:26  #1
+    1 drwxr-xr-x   2   0   0       48 May 26 2021 15:44:23  #1
         ino: 1
         i_mode: 0140755
         i_nlink: 2
@@ -21,5 +21,5 @@ played log entries 3419697679 to 3419697696
         i_addr[5]: 0
         i_addr[6]: 0
         i_addr[7]: 0
-        atime: May 26 2021 18:36:25
-        mtime: May 26 2021 18:36:26
+        atime: May 26 2021 15:44:22
+        mtime: May 26 2021 15:44:23

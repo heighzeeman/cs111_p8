@@ -3,6 +3,8 @@
 # This script dumps all the live blocks and inodes in a V6 file system.
 # With the -a flag, makes a copy and runs ./apply first.
 
+export TZ=US/Pacific
+
 usage() {
     echo "usage: $(basename $0) [-a] file-system.img" >&2
     exit 1

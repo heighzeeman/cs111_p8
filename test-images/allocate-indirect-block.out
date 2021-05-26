@@ -1,5 +1,5 @@
 Reached log end: bad checksum
-played log entries 159194101 to 159194120
+played log entries 4210623464 to 4210623483
 3 used blocks (out of 7)
 Block 3:
   0 01002e00 00000000 00000000 00000000  >  .             <
@@ -46,7 +46,7 @@ Block 5:
 480 732e0a54 68697320 69732066 696c6520  >s. This is file <
 496 636f6e74 656e7473 2e0a5468 69732069  >contents. This i<
 2 used inodes (out of 16)
-    1 drwxr-xr-x   2   0   0       48 May 26 2021 18:36:25  #1
+    1 drwxr-xr-x   2   0   0       48 May 26 2021 15:44:22  #1
         ino: 1
         i_mode: 0140755
         i_nlink: 2
@@ -61,9 +61,9 @@ Block 5:
         i_addr[5]: 0
         i_addr[6]: 0
         i_addr[7]: 0
-        atime: May 26 2021 18:36:25
-        mtime: May 26 2021 18:36:25
-   16 -rw-r--r--   1   0   0     4608 May 26 2021 18:36:25  #16
+        atime: May 26 2021 15:44:22
+        mtime: May 26 2021 15:44:22
+   16 -rw-r--r--   1   0   0     4608 May 26 2021 15:44:22  #16
         ino: 16
         i_mode: 0110644
         i_nlink: 1
@@ -78,5 +78,5 @@ Block 5:
         i_addr[5]: 0
         i_addr[6]: 0
         i_addr[7]: 0
-        atime: May 26 2021 18:36:25
-        mtime: May 26 2021 18:36:25
+        atime: May 26 2021 15:44:22
+        mtime: May 26 2021 15:44:22
