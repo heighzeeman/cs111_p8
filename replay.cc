@@ -65,7 +65,7 @@ V6Replay::read_next(LogEntry *out)
         out->load(r_);
         if (out->sequence_ != sequence_)
             throw log_corrupt("bad sequence number");
-        sequence_++;
+        ++sequence_;
     };
 
     load();

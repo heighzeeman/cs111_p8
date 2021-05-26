@@ -484,9 +484,8 @@ cmd_usedblocks(int argc, char **argv)
     const filsys &sb = fs(V6FS::V6_RDONLY).superblock();
     int nblocks = sb.s_fsize - sb.datastart();
     int nfree = fs_num_free_blocks(fs());
-    printf ("%d used blocks (out of %d)\n\n", (nblocks-nfree), nblocks);
+    printf ("%d used blocks (out of %d)\n", (nblocks-nfree), nblocks);
     Bitmap bm = fs_freemap(fs());
-    assert(nfree == bm.num1());
     int c = 0;
     for (unsigned i = bm.min_index(); i < bm.max_index(); ++i)
         if (!bm.at(i)) {
@@ -497,7 +496,50 @@ cmd_usedblocks(int argc, char **argv)
         }
     if (c)
         printf("\n");
+    if (nfree != bm.num1()) {
+        printf("nfree = %d, bn.num1() = %d\n", nfree, bm.num1());
+        assert(nfree == bm.num1());
+    }
 }
+
+void
+cmd_usedinodes(int argc, char **argv)
+{
+    const filsys &sb = fs(V6FS::V6_RDONLY).superblock();
+    unsigned ninodes = sb.s_isize * INODES_PER_BLOCK;
+    int nfree = fs_num_free_inodes(fs());
+    printf ("%d used inodes (out of %u)\n", (ninodes-nfree), ninodes);
+    Bitmap bm = fs_freemap(fs());
+    int c = 0;
+    for (unsigned i = ROOT_INUMBER; i <= ninodes; ++i)
+        if (fs().iget(i)->i_mode & IALLOC) {
+            if (!(c%10))
+                printf(c ? "\n    " : "    ");
+            printf(" %5d", i);
+            ++c;
+        }
+    if (c)
+        printf("\n");
+}
+
+// Fill all free blocks with garbage.
+void
+cmd_deface(int argc, char **argv)
+{
+    std::string garbage;
+    while (garbage.size() < SECTOR_SIZE)
+        garbage += "This is garbage. ";
+    garbage.resize(SECTOR_SIZE);
+
+    Bitmap bm = fs_freemap(fs());
+    for (unsigned i = bm.min_index(); i < bm.max_index(); ++i)
+        if (bm.at(i)) {
+            Ref<Buffer> bp = fs().bget(i);
+            memcpy(bp->mem_, garbage.data(), sizeof(bp->mem_));
+            bp->bdwrite();
+        }
+}
+
 
 std::map<std::string, std::function<void(int,char **)>> commands {
     {"block", cmd_block},
@@ -510,6 +552,8 @@ std::map<std::string, std::function<void(int,char **)>> commands {
     {"unlink", cmd_unlink},
     {"dump", cmd_dump},
     {"usedblocks", cmd_usedblocks},
+    {"usedinodes", cmd_usedinodes},
+    {"deface", cmd_deface},
 };
 
 [[noreturn]] void

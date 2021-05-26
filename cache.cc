@@ -113,7 +113,7 @@ CacheBase::alloc()
         else if (e->can_evict()) {
             if (e->dirty_) {
                 e->writeback();
-                e->dirty_ = false;
+                e->dirty_ = e->logged_ = false;
             }
             e->idxlink_.unlink();
             e->logged_ = e->dirty_ = e->initialized_ = false;
@@ -163,13 +163,14 @@ CacheBase::flush_range(CacheEntryBase *b, CacheEntryBase *end) noexcept
     while (b != end) {
         CacheEntryBase *c = b;
         b = index_.next(b);
-        if (c->dirty_)
+        if (c->dirty_ &&
+            (!c->logged_ || V6Log::le(c->lsn_, c->dev_->log_->committed_)))
             try {
                 c->writeback();
-                c->dirty_ = false;
+                c->dirty_ = c->logged_ = false;
             } catch (std::exception &e) {
                 ok = false;
-                report("~Cache", &e);
+                report("Cache flush", &e);
             }
     }
     return ok;

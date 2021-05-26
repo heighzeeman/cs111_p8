@@ -397,7 +397,7 @@ main(int argc, char **argv)
     if (!opt_yes)
         flags |= V6FS::V6_RDONLY;
     int res = [&]() {
-        V6FS fs(argv[optind], cache, V6FS::V6_NOLOG);
+        V6FS fs(argv[optind], cache, flags);
         return fsck(fs, opt_yes);
     }();
     exit(res);

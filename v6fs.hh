@@ -142,13 +142,17 @@ struct V6FS {
     V6FS(const V6FS &) = delete;
     ~V6FS();
 
-    bool sync();                // Write all dirty buffers
-    void invalidate();          // Invalidate all buffers
+    bool sync();       // Write all dirty buffers.
+    void invalidate(); // Invalidate all buffers and re-read superblock.
+
     Ref<Buffer> bread(uint16_t blockno); // Read block from disk
-    // Get buffer for block without actually reading it (when you are
-    // about to overwrite the block anyway).
+
+    // Get buffer for block without reading it (when you are about to
+    // overwrite the block anyway and don't need the old contents).
     Ref<Buffer> bget(uint16_t blockno) { return cache_.b(this, blockno); }
-    Ref<Inode> iget(uint16_t inum);
+
+    Ref<Inode> iget(uint16_t inum); // Get inode by number
+
     filsys &superblock() { return superblock_; }
     const filsys &superblock() const { return superblock_; }
 

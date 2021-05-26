@@ -229,6 +229,14 @@ fs_num_free_blocks(V6FS &fs)
 {
     if (fs.log_)
         return fs.log_->freemap_.num1();
+    else if (fs.superblock().s_uselog) {
+        Bitmap freemap(fs.superblock().s_fsize, fs.superblock().datastart());
+        if (pread(fs.fd_, freemap.data(), freemap.datasize(),
+                  (fs.superblock().s_fsize + 1) * SECTOR_SIZE) == -1)
+            threrror("pread");
+        freemap.tidy();
+        return freemap.num1();
+    }
 
     int nblocks = fs.superblock().s_nfree;
     if (!nblocks)

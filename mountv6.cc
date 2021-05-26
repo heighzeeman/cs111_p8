@@ -26,11 +26,13 @@ static struct options {
     int checkuid;
     int create_journal;
     int force;
+    int suppress_commit;
 } options;
 
 #define OPTION(t, p)                            \
     { t, offsetof(struct options, p), 1 }
 static const struct fuse_opt option_spec[] = {
+    OPTION("--suppress-commit", suppress_commit),
     OPTION("--checkuid", checkuid),
     OPTION("--force", force),
     OPTION("-h", show_help),
@@ -515,14 +517,16 @@ usage(const char *progname)
     printf("usage: %s [options] <fs-image> <mountpoint>\n\n", progname);
     printf("File-system specific options:\n"
            "    -j                  Create journal if not already journaling\n"
-           "    --force             Mount dirty FS,"
-           " watch all hell break loose\n"
            "    --checkuid          Use low byte of uid for access control\n"
+           "    --force             Mount a dirty file system (beware!)\n"
+           "    --suppress-commit   Write metadata to log but not file system\n"
+           "                        (only for generating test cases!)\n"
+           " watch all hell break loose\n"
            "\n");
 }
 
 void
-cleanup(std::string progdir, const char *mountpoint)
+mount_cleanup(std::string progdir, const char *mountpoint)
 {
     pid_t pid = fork();
     if (!pid) {
@@ -553,11 +557,11 @@ cleanup(std::string progdir, const char *mountpoint)
             dup2(fds[0], 0);
             close(fds[0]);
         }
-        std::string cleanup = progdir + "/fusecleanup";
-        execl(cleanup.c_str(), cleanup.c_str(), mountpoint, nullptr);
+        std::string fcpath = progdir + "/fusecleanup";
+        execl(fcpath.c_str(), fcpath.c_str(), mountpoint, nullptr);
         // We try to do this in a separate program so that pkill won't
         // kill it, but we fall back to running fusermount here.
-        perror(cleanup.c_str());
+        perror(fcpath.c_str());
         char c;
         read(0, &c, 1);
         execlp("fusermount", "fusermount", "-zu", mountpoint, nullptr);
@@ -624,12 +628,14 @@ main(int argc, char **argv)
             exit(1);
         }
     }
+    if (options.suppress_commit && fs && fs->log_)
+        fs->log_->suppress_commit_ = true;
 
     // Spawn a process with the reading end of a pipe, so as to detect
     // the parent crashing by EOF on the pipe.  When the parent
     // crashes, attempt to clean up the fuse mount point.
     if (!options.show_help && mountpoint)
-        cleanup(progdir, mountpoint);
+        mount_cleanup(progdir, mountpoint);
 
     ret = fuse_main(args.argc, args.argv, &v6_oper, nullptr);
     fuse_opt_free_args(&args);

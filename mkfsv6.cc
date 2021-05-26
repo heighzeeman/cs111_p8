@@ -13,7 +13,9 @@ FScache cache(30);
 [[noreturn]] static void
 usage()
 {
-    fprintf(stderr, "usage: %s file.img [#sectors [#inodes]]\n", progname);
+    fprintf(stderr,
+            "usage: %s file.img [#sectors [#inodes [#journal-blocks]]\n",
+            progname);
     exit(1);
 }
 
@@ -54,7 +56,7 @@ main(int argc, char **argv)
     else
         progname = argv[0];
 
-    if (argc < 2 || argc > 4)
+    if (argc < 2 || argc > 5)
         usage();
 
     const char *target = argv[1];
@@ -71,11 +73,15 @@ main(int argc, char **argv)
     int ninodes = nblocks / 4;
     if (argc >= 4) {
         ninodes = atoi(argv[3]);
-        if (ninodes <= 1)
+        if (ninodes < 1)
             usage();
         if (ninodes > nblocks)
             ninodes = nblocks;
     }
+
+    int log_blocks = -1;
+    if (argc >= 5)
+        log_blocks = atoi(argv[4]);
 
     if (!create_file(target, nblocks, ninodes))
         exit(1);
@@ -97,5 +103,7 @@ main(int argc, char **argv)
     ip->create(".").set_inum(ROOT_INUMBER);
     ip->create("..").set_inum(ROOT_INUMBER);
 
+    if (log_blocks != -1)
+        V6Log::create(fs, log_blocks);
     return 0;
 }

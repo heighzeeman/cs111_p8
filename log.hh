@@ -52,7 +52,8 @@ struct V6Log {
 
     uint16_t balloc_near(uint16_t near, bool metadata);
     uint16_t balloc(bool metadata) {
-        return last_balloc_ = balloc_near(last_balloc_, metadata);
+        return last_balloc_ =
+            balloc_near(suppress_commit_ ? 0 : last_balloc_, metadata);
     }
     void bfree(uint16_t blockno);
 
@@ -60,7 +61,11 @@ struct V6Log {
     void checkpoint(); // Write checkpoint record to increase applied_
     uint32_t space();           // Available log space
 
-    static void create(V6FS &fs);
+    static void create(V6FS &fs, uint16_t log_blocks = 0);
+
+    // If true, prevents flushing the log so you eventually run out of
+    // buffers.  It's just for generating test cases--leave it false.
+    bool suppress_commit_ = false;
 
 private:
     uint16_t last_balloc_ = 0;  // Last allocated block

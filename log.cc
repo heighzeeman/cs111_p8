@@ -37,6 +37,22 @@ read_loghdr(int fd, loghdr *hdr, uint32_t blockno)
         throw log_corrupt("invalid log header");
 }
 
+V6Log::V6Log(V6FS &fs)
+    : fs_(fs), w_(fs.fd_),
+      freemap_(fs_.superblock().s_fsize, fs_.superblock().datastart())
+{
+    read_loghdr(fs_.fd_, &hdr_, fs_.superblock().s_fsize);
+    // Subtract one from sequence because first log entry should match
+    // log header in case we crash before making a checkpoint.
+    applied_ = committed_ = sequence_ = hdr_.l_sequence -1 ;
+    w_.seek(hdr_.l_checkpoint);
+    if (pread(fs.fd_, freemap_.data(), freemap_.datasize(),
+              hdr_.mapstart() * SECTOR_SIZE) == -1)
+        threrror("pread");
+    freemap_.tidy();
+    checkpoint_time_ = time(nullptr);
+}
+
 Tx
 V6Log::begin()
 {
@@ -95,7 +111,14 @@ V6Log::commit()
         freemap_.at(bn) = true;
     freed_.clear();
     in_tx_ = false;
-    if (space() < hdr_.logbytes() / 2)
+    if (suppress_commit_) {
+        flush();
+        if (space() < SECTOR_SIZE) {
+            std::cerr << "log full, aborting" << std::endl;
+            std::abort();
+        }
+    }
+    else if (space() < hdr_.logbytes() / 2)
         checkpoint();
     else if (time(nullptr) > checkpoint_time_ + 30)
         checkpoint();
@@ -105,13 +128,20 @@ void
 V6Log::flush()
 {
     w_.flush();
-    committed_ = in_tx_ ? begin_sequence_ : sequence_;
+    if (!suppress_commit_)
+        committed_ = in_tx_ ? begin_sequence_ : sequence_;
 }
 
 void
 V6Log::checkpoint()
 {
     assert(!in_tx_);
+
+    if (suppress_commit_) {
+        w_.flush();
+        fs_.sync();
+        return;
+    }
 
     hdr_.l_checkpoint = w_.tell();
     hdr_.l_sequence = sequence_ + 1;
@@ -135,22 +165,6 @@ V6Log::checkpoint()
     checkpoint_time_ = time(nullptr);
 }
 
-// Note it's a little weird that we are duping the file descriptor and
-// sharing a seek offset with the V6FS code, but the V6FS only uses
-// pread/pwrite, so this is okay.
-V6Log::V6Log(V6FS &fs)
-    : fs_(fs), w_(fs.fd_),
-      freemap_(fs_.superblock().s_fsize, fs_.superblock().datastart())
-{
-    read_loghdr(fs_.fd_, &hdr_, fs_.superblock().s_fsize);
-    applied_ = committed_ = sequence_ = hdr_.l_sequence;
-    w_.seek(hdr_.l_checkpoint);
-    if (pread(fs.fd_, freemap_.data(), freemap_.datasize(),
-              hdr_.mapstart() * SECTOR_SIZE) == -1)
-        threrror("pread");
-    freemap_.tidy();
-}
-
 uint32_t
 V6Log::space()
 {
@@ -160,7 +174,7 @@ V6Log::space()
 }
 
 void
-V6Log::create(V6FS &fs)
+V6Log::create(V6FS &fs, uint16_t log_blocks)
 {
     filsys &sb = fs.superblock();
 
@@ -170,7 +184,9 @@ V6Log::create(V6FS &fs)
     lh.l_hdrblock = sb.s_fsize;
     lh.l_mapsize = (sb.s_fsize - sb.datastart() + (8 * SECTOR_SIZE - 1)) /
         (8 * SECTOR_SIZE);
-    lh.l_logsize = lh.l_mapsize + sb.s_fsize/128 + 8;
+    if (!log_blocks)
+        log_blocks = sb.s_fsize/128+8;
+    lh.l_logsize = lh.l_mapsize + log_blocks;
     lh.l_checkpoint = lh.logstart() * SECTOR_SIZE;
     lh.l_sequence = rnd_uint32();
 

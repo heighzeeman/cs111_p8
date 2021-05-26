@@ -81,12 +81,13 @@ V6FS::V6FS(std::string path, FScache &cache, int flags)
 V6FS::~V6FS()
 {
     if (!readonly_) {
-        sync();
         if (log_)
             log_->checkpoint();
+        else
+            sync();
         log_ = nullptr;
         superblock().s_fmod = 0;
-        if (!unclean_)
+        if (!unclean_ && (!log_ || !log_->suppress_commit_))
             superblock().s_dirty = 0;
         writeblock(&superblock_, SUPERBLOCK_SECTOR);
     }
@@ -97,10 +98,8 @@ bool
 V6FS::sync()
 {
     bool ok = true;
-
     if (!cache_.i.flush_dev(this))
         ok = false;
-
     if (!cache_.b.flush_dev(this))
         ok = false;
 
@@ -207,7 +206,7 @@ V6FS::balloc(bool metadata)
     uint16_t bn = log_ ? log_->balloc(metadata) : balloc_freelist();
     if (!bn)
         throw resource_exhausted("no free blocks on device", -ENOSPC);
-    Ref<Buffer> bp = cache_.b(this, bn);    // Initialize without reading
+    Ref<Buffer> bp = bget(bn);
     memset(bp->mem_, 0, sizeof(bp->mem_));
     bp->bdwrite();
     return bp;
@@ -331,9 +330,11 @@ V6FS::ialloc()
     }
     if (superblock().s_ninode == 0)
         throw resource_exhausted("out of inodes", -ENOSPC);
-    Ref<Inode> ip = iget(superblock().s_inode[--superblock().s_ninode]);
+    Ref<Inode> ip =
+        cache_.i(this, superblock().s_inode[--superblock().s_ninode]);
     superblock().s_fmod = 1;
     memset(&ip->raw(), 0, sizeof(inode));
+    ip->initialized_ = true;
     return ip;
 }
 
