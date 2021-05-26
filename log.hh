@@ -78,7 +78,17 @@ public:
     Tx() : log_(nullptr) {}
     Tx(Tx &&other) : log_(other.log_) { other.log_ = nullptr; }
     ~Tx() { if (log_) log_->commit(); }
-    Tx &operator=(Tx &&other) { std::swap(log_, other.log_); return *this; }
+    // Monotonically accumulates the transaction, so you can
+    // repeatedly call tx = begin();
+    Tx &operator=(Tx &&other) {
+        if (!log_) {
+            log_ = other.log_;
+            other.log_ = nullptr;
+        }
+        else                    // Should only have one Tx at a time
+            assert (!other.log_);
+        return *this;
+    }
 private:
     friend struct V6Log;
     V6Log *log_;

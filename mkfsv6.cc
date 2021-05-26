@@ -82,7 +82,7 @@ main(int argc, char **argv)
 
     V6FS fs(target, cache);
     const uint16_t start = INODE_START_SECTOR + fs.superblock().s_isize;
-    for (uint16_t bn = nblocks -1; bn-- > start;)
+    for (uint16_t bn = nblocks; bn-- > start;)
         fs.bfree(bn);
 
     Ref<Inode> ip = fs.iget(ROOT_INUMBER);

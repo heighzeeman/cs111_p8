@@ -38,7 +38,7 @@ struct Bitmap {
     Bitmap(Bitmap &&) = default;
     Bitmap &operator=(Bitmap &&) = default;
 
-    // Number of bits in bitmap
+    // Valid range of indices
     std::size_t min_index() const { return zero_; }
     std::size_t max_index() const { return zero_ + nbits_; }
 

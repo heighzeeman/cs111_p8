@@ -41,6 +41,18 @@ V6FS::V6FS(std::string path, FScache &cache, int flags)
     if (magic != BOOTBLOCK_MAGIC_NUM)
         throw std::runtime_error("boot block missing magic number");
     unclean_ = superblock().s_dirty;
+
+    // Legacy V6 file systems seem to have garbage at end of superblock
+    if (superblock().s_uselog)
+        try {
+            loghdr hdr;
+            read_loghdr(fd_, &hdr, superblock().s_fsize);
+        }
+        catch (std::exception &e) {
+            printf("invalid log header, clearing s_uselog in superblock\n");
+            superblock().s_uselog = 0;
+        }
+
     if ((flags & V6_MUST_BE_CLEAN) && unclean_ &&
         (!superblock().s_uselog ||
          (flags & (V6_REPLAY|V6_NOLOG)) != V6_REPLAY))
@@ -291,16 +303,6 @@ V6FS::cache_info(void *_p, size_t n)
         res.offset = iblock(ip->inum()) * SECTOR_SIZE +
             iindex(ip->inum()) * sizeof(inode) + (p - b);
         res.entry = ip;
-#if 0
-        LogPatch ep {
-            uint16_t(res.offset / SECTOR_SIZE),
-            uint16_t(res.offset % SECTOR_SIZE),
-            std::vector(reinterpret_cast<uint8_t*>(p),
-                        reinterpret_cast<uint8_t*>(p) + n),
-        };
-        printf("CacheInfo inode %d, offset %d\n  %s\n",
-               ip->inum(), res.offset, what_inode_patch(ep).c_str());
-#endif
     }
     if (!e || p < b || p >= e)
         throw std::out_of_range("cache_info: invalid pointer");

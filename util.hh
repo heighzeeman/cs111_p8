@@ -47,5 +47,9 @@ struct cleanup {
     cleanup(cleanup &&c) : f_(c.f_) { c.f_ = nullptr; }
     template<typename F> cleanup(F &&f) : f_(std::forward<F>(f)) {}
     cleanup &operator=(const cleanup &c) = delete;
+    cleanup &operator=(std::function<void()> f) {
+        f_ = std::move(f);
+        return *this;
+    }
     ~cleanup() { if (f_) f_(); }
 };

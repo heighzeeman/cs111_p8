@@ -173,8 +173,6 @@ get_attr(Ref<Inode> ip, struct stat *st)
     return 0;
 }
 
-#define V6_INIT() Tx __tx = fs->begin()
-
 static void *
 v6_init(struct fuse_conn_info *conn, struct fuse_config *cfg)
 {
@@ -216,7 +214,7 @@ v6_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 static int
 v6_open(const char *path, struct fuse_file_info *fi)
 {
-    V6_INIT();
+    Tx _tx = fs->begin();
     Ref<Inode> ip = get_inode(path, fi);
     if (int err = check_access(ip, flags_to_mode(fi->flags)))
         return err;
@@ -234,7 +232,7 @@ v6_open(const char *path, struct fuse_file_info *fi)
 static int
 v6_truncate(const char *path, off_t size, struct fuse_file_info *fi)
 {
-    V6_INIT();
+    Tx _tx = fs->begin();
     Ref<Inode> ip = get_inode(path, fi);
     if (int err = check_access(ip, 2))
         return err;
@@ -246,10 +244,10 @@ static int
 v6_utimens(const char *path, const struct timespec tv[2],
            struct fuse_file_info *fi)
 {
-    V6_INIT();
     Ref<Inode> ip = get_inode(path, fi);
     if (int err = check_access(ip, 2))
         return err;
+    Tx _tx = fs->begin();
     if (tv[0].tv_nsec == UTIME_NOW) {
         ip->atouch();
         if (tv[1].tv_nsec == UTIME_NOW) {
@@ -272,10 +270,10 @@ v6_utimens(const char *path, const struct timespec tv[2],
 static int
 v6_chown(const char *path, uid_t uid, gid_t gid, struct fuse_file_info *fi)
 {
-    V6_INIT();
     Ref<Inode> ip = get_inode(path, fi);
     if (int err = file_owner(ip))
         return err;
+    Tx _tx = fs->begin();
     if (uid != uid_t(-1)) {
         if (!root_user())
             ip->i_mode &= ~04000;
@@ -294,10 +292,10 @@ v6_chown(const char *path, uid_t uid, gid_t gid, struct fuse_file_info *fi)
 static int
 v6_chmod(const char *path, mode_t mode, struct fuse_file_info *fi)
 {
-    V6_INIT();
     Ref<Inode> ip = get_inode(path, fi);
     if (int err = file_owner(ip))
         return err;
+    Tx _tx = fs->begin();
     // Don't allow setgid if not in group
     if ((mode & 02000) && !root_user()
         && (fuse_get_context()->gid & 0xff) != ip->i_gid)
@@ -325,11 +323,11 @@ static int
 v6_write(const char* path, const char *buf, size_t size, off_t offset,
          struct fuse_file_info* fi)
 {
-    V6_INIT();
     Ref<Inode> ip = get_inode(path, fi);
     if (!ip)
         return -ENOENT;
 
+    Tx _tx = fs->begin();
     Cursor c(ip);
     c.seek(offset);
     // Since write's aren't metadata, don't bother logging mtime
@@ -340,7 +338,6 @@ v6_write(const char* path, const char *buf, size_t size, off_t offset,
 static int
 v6_mknod(const char *path, mode_t mode, dev_t dev)
 {
-    V6_INIT();
     uint16_t newmode = (mode & 07777) | IALLOC;
     switch (mode & S_IFMT) {
     case S_IFBLK:
@@ -357,6 +354,7 @@ v6_mknod(const char *path, mode_t mode, dev_t dev)
     if (!root_user())
         return -EPERM;
 
+    Tx _tx = fs->begin();
     Dirent de;
     if (int err = get_dirent(&de, path, ND_CREATE|ND_EXCLUSIVE))
         return err;
@@ -371,7 +369,7 @@ v6_mknod(const char *path, mode_t mode, dev_t dev)
 static int
 v6_create(const char *path, mode_t mode, fuse_file_info *fi)
 {
-    V6_INIT();
+    Tx _tx = fs->begin();
     Dirent de;
     if (int err = get_dirent(&de, path, ND_CREATE))
         return err;
@@ -401,7 +399,7 @@ v6_unlink(const char *path)
 static int
 v6_mkdir(const char *path, mode_t mode)
 {
-    V6_INIT();
+    Tx _tx = fs->begin();
     Dirent de;
     if (int err = get_dirent(&de, path, ND_CREATE|ND_EXCLUSIVE))
         return err;
@@ -427,10 +425,10 @@ v6_rmdir(const char *path)
 static int
 v6_link(const char *oldpath, const char *newpath)
 {
-    V6_INIT();
     Dirent oldde, newde;
     if (int err = get_dirent(&oldde, oldpath, ND_DIRWRITE))
         return err;
+    Tx _tx = fs->begin();
     if (int err = get_dirent(&newde, newpath,
                              ND_CREATE|ND_EXCLUSIVE|ND_DIRWRITE))
         return err;
@@ -443,11 +441,11 @@ v6_rename(const char *oldpath, const char *newpath, unsigned int flags)
     if (flags)
         return -EINVAL;
 
-    V6_INIT();
     Dirent oldde;
     if (int err = get_dirent(&oldde, oldpath, ND_DIRWRITE))
         return err;
 
+    Tx _tx = fs->begin();
     Dirent newde;
     if (int err = get_dirent(&newde, newpath, ND_CREATE))
         return err;
@@ -479,35 +477,9 @@ v6_statfs(const char *path, struct statvfs *sfs)
     memset(sfs, 0, sizeof(*sfs));
     sfs->f_bsize = SECTOR_SIZE;
     sfs->f_blocks = sb.s_fsize - sb.datastart();
-    if (fs->log_)
-        sfs->f_bavail = sfs->f_bfree = fs->log_->freemap_.num1();
-    else {
-        int nblocks = sb.s_nfree;
-        if (nblocks > 0)
-            for (uint16_t next = sb.s_free[0]; next;) {
-                Ref<Buffer> bp = fs->bread(next);
-                nblocks += array_size(sb.s_free);
-                next = bp->at<uint16_t>(0);
-                fs->cache_.b.free(bp);
-            }
-        sfs->f_bavail = sfs->f_bfree = nblocks;
-    }
+    sfs->f_bavail = sfs->f_bfree = fs_num_free_blocks(*fs);
     sfs->f_files = sb.s_isize * INODES_PER_BLOCK;
-    int ninodes = 0;
-    for (uint16_t i = INODE_START_SECTOR + sb.s_isize;
-         i-- > INODE_START_SECTOR;) {
-        Ref<Buffer> bp = fs->bread(i);
-        for (int j = 0; j < INODES_PER_BLOCK; ++j) {
-            uint32_t inum = (i-INODE_START_SECTOR) * INODES_PER_BLOCK + j + 1;
-            if (Ref<Inode> ip = fs->cache_.i.try_lookup(fs, inum)) {
-                if (!(ip->i_mode & IALLOC))
-                    ++ninodes;
-            }
-            else if (!(bp->at<inode>(j).i_mode & IALLOC))
-                ++ninodes;
-        }
-    }
-    sfs->f_favail = sfs->f_ffree = ninodes;
+    sfs->f_favail = sfs->f_ffree = fs_num_free_inodes(*fs);
     return 0;
 }
 

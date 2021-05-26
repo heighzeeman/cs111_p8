@@ -33,8 +33,7 @@ std::string
 hexdump(const void *_p, size_t len)
 {
     static constexpr char hexdigits[] = "0123456789abcdef";
-    const uint8_t *p = static_cast<const uint8_t*>(_p),
-        *e = p + len;
+    const uint8_t *p = static_cast<const uint8_t*>(_p), *e = p + len;
     std::string res;
     res.reserve(2*len);
     for (; p != e; ++p) {
@@ -158,14 +157,14 @@ LogEntry::save(Writer &w) const
 namespace detail {
 
 template<typename V, size_t I>
-static void
+void
 indexed_emplace(V &v)
 {
     v.template emplace<I>();
 }
 
 template<typename V, size_t...Is>
-static constexpr std::array<void(*)(V&), sizeof...(Is)>
+constexpr std::array<void(*)(V&), sizeof...(Is)>
 make_variant_initializers(std::index_sequence<Is...>)
 {
     return { indexed_emplace<V, Is>... };
@@ -174,8 +173,8 @@ make_variant_initializers(std::index_sequence<Is...>)
 } // namespace detail
 
 template<typename...Ts>
-static inline void
-set_variant(std::variant<Ts...> &v, const size_t i)
+inline void
+set_variant_index(std::variant<Ts...> &v, const size_t i)
 {
     static constexpr auto initializers =
         detail::make_variant_initializers<std::variant<Ts...>>
@@ -205,7 +204,7 @@ LogEntry::load(Reader &r)
     CrcReader cr(r);
     Header h;
     entry_read(cr, h);
-    set_variant(entry_, h.type);
+    set_variant_index(entry_, h.type);
     sequence_ = h.sequence;
     visit([&cr](auto &t) { entry_read(cr, t); });
     Footer f;
@@ -253,6 +252,8 @@ what_data_patch(const LogPatch &e)
     }
     else if (e.offset_in_block == 0 &&
              e.bytes.size() == sizeof(inode::i_addr) + 1) {
+        // The + 1 in the size is a hack in Inode::make_large so we
+        // can differentiate this case from a directory entry above.
         res << "block pointers";
         std::array<uint16_t, IADDR_SIZE> ptrs;
         memcpy(ptrs.data(), e.bytes.data(), sizeof(uint16_t)*ptrs.size());

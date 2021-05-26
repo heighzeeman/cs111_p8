@@ -6,14 +6,16 @@
 
 #include <unistd.h>
 
+#include "bitmap.hh"
 #include "blockpath.hh"
+#include "fsops.hh"
 
 const char *progname;
 FScache cache(30);
 
 struct Fsck {
     V6FS &fs_;
-    std::vector<bool> used_blocks_;
+    Bitmap freemap_;
     std::vector<uint8_t> nlinks_;
     bool corrupted_ = false;
     std::ostream &out_ = std::cout;
@@ -97,9 +99,12 @@ struct Fsck {
 };
 
 Fsck::Fsck(V6FS &fs)
-    : fs_(fs), used_blocks_(fs_.superblock().s_fsize, 0),
+    : fs_(fs),
+      freemap_(fs_.superblock().s_fsize, fs_.superblock().datastart()),
       nlinks_(ROOT_INUMBER + fs_.superblock().s_isize*INODES_PER_BLOCK, 0)
 {
+    memset(freemap_.data(), 0xff, freemap_.datasize());
+    freemap_.tidy();
 }
 
 bool
@@ -116,10 +121,10 @@ Fsck::scan_blocks(BlockPtrArray ba, BlockPath end)
                 out() << "block " << bn << ": bad block number in inode\n";
             else if (i > end || (i == end && end.tail().is_zero()))
                 out() << "block " << bn << ": allocated beyond end of file\n";
-            else if (used_blocks_.at(bn))
+            else if (!freemap_.at(bn))
                 out() << "block " << bn << ": cross-allocated\n";
             else {
-                used_blocks_[bn] = true;
+                freemap_.at(bn) = false;
                 if (end.height() <= 1
                     || scan_blocks(ba.fetch_at(i), end.tail_at(i)))
                     continue;
@@ -239,7 +244,7 @@ Fsck::apply()
     patches_.clear();
     fs_.sync();
 
-    fs_.superblock().s_uselog = false; // XXX - no bitmap support yet
+    fs_.superblock().s_uselog = false; // No log support yet
     rebuild_freelist();
 
     for (const auto &[dino, ino, name] : newlinks_) {
@@ -259,7 +264,7 @@ Fsck::rebuild_freelist()
     // Since freelist is FIFO, going backwards may lead to more
     // contiguous allocation.
     for (uint16_t bn = fs_.superblock().s_fsize; bn-- > start;)
-        if (!used_blocks_.at(bn))
+        if (freemap_.at(bn))
             fs_.bfree(bn);
 }
 
@@ -301,6 +306,16 @@ fsck(V6FS &fs, bool write = true)
         res = false;
         if (write)
             fsck.apply();
+    }
+    {
+        bool ok = false;
+        try {
+            ok = fsck.freemap_ == fs_freemap(fs);
+        } catch(std::exception&) {}
+        if (!ok) {
+            std::cout << "free list was incorrect\n";
+            res = false;
+        }
     }
     if (!fsck.scan_directory(fs.iget(ROOT_INUMBER))) {
         std::cout << "scan directories required fixes\n";

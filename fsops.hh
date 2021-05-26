@@ -32,3 +32,13 @@ int fs_mkdir(Dirent where, inode_initializer);
 int fs_rmdir(Dirent where);
 int fs_link(Dirent oldde, Dirent newde);
 int fs_unlink(Dirent where);
+int fs_num_free_inodes(V6FS &fs);
+int fs_num_free_blocks(V6FS &fs);
+
+// Get a copy of the freemap.  If the FS in is logging mode, copy the
+// in-memory bitmap.  Otherwise if the superblock supports logging,
+// read the log area from disk even if the V6FS isn't currently in
+// logging mode.  Otherwise, if free blocks are stored in the old 1975
+// 100-wide linked-list format, traverse the list to build the
+// freemap.
+Bitmap fs_freemap(V6FS &fs);

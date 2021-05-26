@@ -6,9 +6,8 @@
 #include <cassert>
 #include <iostream>
 
+#include "fsops.hh"
 #include "log.hh"
-#include "util.hh"
-#include "v6fs.hh"
 
 uint32_t
 rnd_uint32()
@@ -174,30 +173,12 @@ V6Log::create(V6FS &fs)
     lh.l_logsize = lh.l_mapsize + sb.s_fsize/128 + 8;
     lh.l_checkpoint = lh.logstart() * SECTOR_SIZE;
     lh.l_sequence = rnd_uint32();
-    //lh.l_sequence = 1;
 
     if (ftruncate(fs.fd_, lh.l_hdrblock * SECTOR_SIZE) == -1 ||
         ftruncate(fs.fd_, lh.logend() * SECTOR_SIZE) == -1)
         threrror("ftruncate");
 
-    Bitmap freemap(lh.l_mapsize * SECTOR_SIZE * 8);
-    auto mark = [&freemap,ds=sb.datastart()](int i){
-        freemap.at(i - ds) = true;
-    };
-
-    uint16_t bn = 0;
-    for (int i = sb.s_nfree; --i > 0;)
-        mark(sb.s_free[i]);
-    if (sb.s_nfree > 0)
-        bn = sb.s_free[0];
-    while (bn) {
-        mark(bn);
-        Ref<Buffer> bp = fs.bread(bn);
-        for (int i = 100; --i > 0;)
-            mark(bp->at<uint16_t>(i));
-        bn = bp->at<uint16_t>(0);
-    }
-
+    Bitmap freemap = fs_freemap(fs);
     if (pwrite(fs.fd_, freemap.data(), freemap.datasize(),
                lh.mapstart() * SECTOR_SIZE) == -1)
         threrror("pwrite");

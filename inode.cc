@@ -96,6 +96,7 @@ Inode::make_small(DoLog dolog)
         memset(addrs, 0, sizeof(addrs));
 
     free_blocks(Ref{this}, blockno_path(i_mode, IADDR_SIZE));
+    fs().bfree(i_addr[0]);
     memcpy(i_addr, addrs, sizeof(addrs));
     i_mode &= ~ILARG;
     if (dolog == DoLog::LOG)
@@ -129,6 +130,7 @@ Inode::getblock(uint16_t blockno, bool allocate)
 {
     if (allocate && blockno >= IADDR_SIZE && !make_large())
         throw std::runtime_error("Inode::make_large failed");
+    assert(!allocate || !fs().log_ || fs().log_->in_tx_);
 
     Ref<Buffer> bp;
     BlockPtrArray ba(this);
@@ -138,8 +140,8 @@ Inode::getblock(uint16_t blockno, bool allocate)
         if (uint16_t bn = ba.at(idx); !bn) {
             if (!allocate)
                 return nullptr;
-            else if ((bp = fs().balloc(idx.height() > 1 ||
-                                       (i_mode&IFMT) == IFDIR))) {
+            if ((bp = fs().balloc(idx.height() > 1 ||
+                                  (i_mode&IFMT) == IFDIR))) {
                 bn = bp->blockno();
                 ba.set_at(idx, bn);
             }

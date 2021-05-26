@@ -14,7 +14,7 @@
 #include <unistd.h>
 
 #include "blockpath.hh"
-#include "util.hh"
+#include "fsops.hh"
 
 using namespace std::string_literals;
 
@@ -461,7 +461,12 @@ cmd_dump(int argc, char **argv)
         return;
 
     loghdr h;
-    read_loghdr(fd, &h, s.s_fsize);
+    try {
+        read_loghdr(fd, &h, s.s_fsize);
+    }
+    catch (std::exception &e) {
+        return;
+    }
     printf("\n* loghdr contents:\n");
 #define DUMP(spec, field) printf("%11s: " #spec "\n", #field, h.field)
     DUMP(0x%x, l_magic);
@@ -471,6 +476,27 @@ cmd_dump(int argc, char **argv)
     DUMP(%d, l_checkpoint);
     DUMP(%u, l_sequence);
 #undef DUMP
+}
+
+void
+cmd_usedblocks(int argc, char **argv)
+{
+    const filsys &sb = fs(V6FS::V6_RDONLY).superblock();
+    int nblocks = sb.s_fsize - sb.datastart();
+    int nfree = fs_num_free_blocks(fs());
+    printf ("%d used blocks (out of %d)\n\n", (nblocks-nfree), nblocks);
+    Bitmap bm = fs_freemap(fs());
+    assert(nfree == bm.num1());
+    int c = 0;
+    for (unsigned i = bm.min_index(); i < bm.max_index(); ++i)
+        if (!bm.at(i)) {
+            if (!(c%10))
+                printf(c ? "\n    " : "    ");
+            printf(" %5d", i);
+            ++c;
+        }
+    if (c)
+        printf("\n");
 }
 
 std::map<std::string, std::function<void(int,char **)>> commands {
@@ -483,6 +509,7 @@ std::map<std::string, std::function<void(int,char **)>> commands {
     {"truncate", cmd_truncate},
     {"unlink", cmd_unlink},
     {"dump", cmd_dump},
+    {"usedblocks", cmd_usedblocks},
 };
 
 [[noreturn]] void
