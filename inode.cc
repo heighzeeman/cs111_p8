@@ -140,16 +140,12 @@ Inode::getblock(uint16_t blockno, bool allocate)
         if (uint16_t bn = ba.at(idx); !bn) {
             if (!allocate)
                 return nullptr;
-            if ((bp = fs().balloc(idx.height() > 1 ||
-                                  (i_mode&IFMT) == IFDIR))) {
-                bn = bp->blockno();
-                ba.set_at(idx, bn);
-            }
-            else
-                throw std::runtime_error("Inode::getblock: disk full");
+            bp = fs().balloc(idx.height() > 1 || (i_mode&IFMT) == IFDIR);
+            bn = bp->blockno();
+            ba.set_at(idx, bp->blockno());
         }
-        else if (bp = fs().bread(bn); !bp)
-            throw std::runtime_error("Inode::getblock: no buffers");
+        else
+            bp = fs().bread(bn);
         ba = bp;
     }
 

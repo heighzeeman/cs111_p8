@@ -322,7 +322,7 @@ v6_read(const char *path, char *buf, size_t size, off_t offset,
 static int
 v6_write(const char* path, const char *buf, size_t size, off_t offset,
          struct fuse_file_info* fi)
-{
+try {
     Ref<Inode> ip = get_inode(path, fi);
     if (!ip)
         return -ENOENT;
@@ -333,7 +333,10 @@ v6_write(const char* path, const char *buf, size_t size, off_t offset,
     // Since write's aren't metadata, don't bother logging mtime
     ip->mtouch(DoLog::NOLOG);
     return c.write(buf, size);
-}
+ }
+ catch(const resource_exhausted &e) {
+     return e.error;
+ }
 
 static int
 v6_mknod(const char *path, mode_t mode, dev_t dev)
