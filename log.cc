@@ -185,7 +185,7 @@ V6Log::create(V6FS &fs, uint16_t log_blocks)
     lh.l_mapsize = (sb.s_fsize - sb.datastart() + (8 * SECTOR_SIZE - 1)) /
         (8 * SECTOR_SIZE);
     if (!log_blocks)
-        log_blocks = sb.s_fsize/128+8;
+        log_blocks = sb.s_fsize/64+8;
     lh.l_logsize = lh.l_mapsize + log_blocks;
     lh.l_checkpoint = lh.logstart() * SECTOR_SIZE;
     lh.l_sequence = rnd_uint32();

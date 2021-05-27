@@ -5,7 +5,7 @@ void
 Cursor::seek(uint32_t pos)
 {
     if (pos > MAX_FILE_SIZE)
-        throw std::length_error("seek: maximum file size exceeded");
+        throw resource_exhausted("seek: maximum file size exceeded", -EFBIG);
     if ((pos-1) / SECTOR_SIZE != (pos_-1) / SECTOR_SIZE)
         bp_ = nullptr;
     pos_ = pos;
@@ -42,7 +42,8 @@ Cursor::writeref(size_t n)
     if (n > SECTOR_SIZE || (pos_+n-1)/SECTOR_SIZE != pos_/SECTOR_SIZE)
         throw std::logic_error("Cursor::readref: alignment error");
     if (n > MAX_FILE_SIZE - pos_)
-        throw std::length_error("writeref: maximum file size exceeded");
+        throw resource_exhausted("writeref: maximum file size exceeded",
+                                 -EFBIG);
 
     bp_ = ip_->getblock(pos_ / SECTOR_SIZE, true);
     if (!bp_)
@@ -96,7 +97,7 @@ Cursor::write(const void *_buf, size_t n)
     const char *buf = static_cast<const char *>(_buf);
 
     if (n > MAX_FILE_SIZE - pos_)
-        throw std::length_error("write: maximum file size exceeded");
+        throw resource_exhausted("write: maximum file size exceeded", -EFBIG);
 
     int nwritten = 0;
     while (n > 0) {

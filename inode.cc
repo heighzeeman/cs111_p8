@@ -64,8 +64,6 @@ Inode::make_large()
         return true;
 
     Ref<Buffer> bp = fs().balloc(true);
-    if (!bp)
-        return false;
     memcpy(bp->mem_, i_addr, sizeof(i_addr));
     // Log one extra byte (which is harmless in a 512-byte block) to
     // make it easy to differentiate this log entry from a direntryv6.
@@ -108,7 +106,8 @@ Inode::truncate(uint32_t sz, DoLog dolog)
 {
     bool converted_to_small = false;
     if (sz > MAX_FILE_SIZE)
-        throw std::length_error("truncate: maximum file size exceeded");
+        throw resource_exhausted("truncate: maximum file size exceeded",
+                                 -EFBIG);
     if (sz <= IADDR_SIZE*SECTOR_SIZE) {
         make_small(DoLog::NOLOG);
         converted_to_small = true;
@@ -128,8 +127,8 @@ Inode::truncate(uint32_t sz, DoLog dolog)
 Ref<Buffer>
 Inode::getblock(uint16_t blockno, bool allocate)
 {
-    if (allocate && blockno >= IADDR_SIZE && !make_large())
-        throw std::runtime_error("Inode::make_large failed");
+    if (allocate && blockno >= IADDR_SIZE)
+        make_large();
     assert(!allocate || !fs().log_ || fs().log_->in_tx_);
 
     Ref<Buffer> bp;
