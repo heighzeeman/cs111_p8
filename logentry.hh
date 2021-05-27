@@ -41,8 +41,8 @@ struct loghdr {
     uint32_t l_magic;           // LOG_MAGIC_NUM
     uint32_t l_hdrblock;        // Block containing this log header
 
-    // Total size of log.  File system plus log area consume
-    // l_hdrblock+l_logsize sectors.
+    // Total size of log in SECTOR_SIZE blocks.  File system plus log
+    // area consume l_hdrblock+l_logsize sectors.
     uint16_t l_logsize;
 
     // Number of freemap blocks at start of log.
