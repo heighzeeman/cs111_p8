@@ -7,6 +7,8 @@
 #include "replay.hh"
 #include "v6fs.hh"
 
+#include <stdexcept>
+
 V6Replay::V6Replay(V6FS &fs)
     : fs_(fs), r_(fs_.fd_),
       freemap_(fs_.superblock().s_fsize, fs_.superblock().datastart())
@@ -23,31 +25,50 @@ V6Replay::V6Replay(V6FS &fs)
 void
 V6Replay::apply(const LogBegin &e)
 {
-    // You need to implement this function
+    // Nothing to do here
 }
 
 void
 V6Replay::apply(const LogPatch &e)
 {
-    // You need to implement this function
+    Ref<Buffer> contents = fs_.bread(e.blockno);
+	uint16_t offset = e.offset_in_block;
+	const std::vector<uint8_t>& toWrite = e.bytes;
+	
+	for (size_t i = 0; i < toWrite.size(); i++) {
+		if (i >= SECTOR_SIZE) throw std::runtime_error("Out of bounds LogPatch at i = " + std::to_string(i) + "\n");
+		contents->mem_[offset + i] = toWrite[i];
+	}
+	
+	contents->bdwrite();
 }
 
 void
 V6Replay::apply(const LogBlockAlloc &e)
 {
-    // You need to implement this function
+	if (freemap_.at(e.blockno) == false)
+		throw std::runtime_error("Block: " + std::to_string(e.blockno) + " already allocated\n");
+	freemap_.at(e.blockno) = false;
+	
+	if (e.zero_on_replay == 1) {
+		Ref<Buffer> contents = fs_.bget(e.blockno);
+		std::memset(contents->mem_, 0, SECTOR_SIZE);
+		contents->bdwrite();
+	}
 }
 
 void
 V6Replay::apply(const LogBlockFree &e)
 {
-    // You need to implement this function
+    if (freemap_.at(e.blockno) == true)
+		throw std::runtime_error("Block: " + std::to_string(e.blockno) + " already free\n");
+	freemap_.at(e.blockno) = true;
 }
 
 void
 V6Replay::apply(const LogCommit &e)
 {
-    // You need to implement this function
+    // Nothing to do here
 }
 
 void
