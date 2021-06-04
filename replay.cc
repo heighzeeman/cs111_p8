@@ -36,7 +36,8 @@ V6Replay::apply(const LogPatch &e)
 	const std::vector<uint8_t>& toWrite = e.bytes;
 	
 	for (size_t i = 0; i < toWrite.size(); i++) {
-		if (i >= SECTOR_SIZE) throw std::runtime_error("Out of bounds LogPatch at i = " + std::to_string(i) + "\n");
+		if (i >= sizeof(contents->mem_))
+			throw std::runtime_error("Out of bounds LogPatch at i = " + std::to_string(i) + "\n");
 		contents->mem_[offset + i] = toWrite[i];
 	}
 	
@@ -52,7 +53,7 @@ V6Replay::apply(const LogBlockAlloc &e)
 	
 	if (e.zero_on_replay == 1) {
 		Ref<Buffer> contents = fs_.bget(e.blockno);
-		std::memset(contents->mem_, 0, SECTOR_SIZE);
+		std::memset(contents->mem_, 0, sizeof(contents->mem_));
 		contents->bdwrite();
 	}
 }
