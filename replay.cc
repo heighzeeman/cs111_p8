@@ -146,9 +146,12 @@ V6Replay::replay()
     if (pwrite(fs_.fd_, freemap_.data(), freemap_.datasize(),
                hdr_.mapstart() * SECTOR_SIZE) == -1)
         threrror("pwrite");
-    fs_.writeblock(&hdr_, fs_.superblock().s_fsize);
     // We don't log inode allocations, so just force re-scan
     fs_.superblock().s_ninode = 0;
     fs_.superblock().s_fmod = 1;
+
+    // flush all the changes we just made before updating loghdr to
+    // reflect a new checkpoint
+    fs_.sync();
     fs_.unclean_ = false;
 }
